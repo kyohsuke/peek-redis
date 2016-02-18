@@ -9,15 +9,20 @@ class Redis::Client
   self.query_count = Atomic.new(0)
   self.query_time = Atomic.new(0)
 
-  def call_with_timing(*args, &block)
-    start = Time.now
-    call_without_timing(*args, &block)
-  ensure
-    duration = (Time.now - start)
-    Redis::Client.query_time.update { |value| value + duration }
-    Redis::Client.query_count.update { |value| value + 1 }
+  if defined? Rails && Rails::VERSION::MAJOR >= 5
+    require 'peek-redis/timing'
+    prepend ::Peek::Redis::Timing
+  else
+    def call_with_timing(*args, &block)
+      start = Time.now
+      call_without_timing(*args, &block)
+    ensure
+      duration = (Time.now - start)
+      Redis::Client.query_time.update { |value| value + duration }
+      Redis::Client.query_count.update { |value| value + 1 }
+    end
+    alias_method_chain :call, :timing
   end
-  alias_method_chain :call, :timing
 end
 
 module Peek
